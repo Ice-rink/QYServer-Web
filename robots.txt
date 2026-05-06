@@ -1,9 +1,15 @@
+# robots.txt generated at https://www.lanren-tools.com/robots/
+User-agent: Bytespider
+Disallow: /
+User-agent: Yisouspider
+Disallow: /
 User-agent: Googlebot
 Disallow:
 User-agent: Bingbot
 Disallow:
 User-agent: *
 Disallow:
+Crawl-delay: 120
 Disallow: /bin/
 Disallow: /asses/
 
