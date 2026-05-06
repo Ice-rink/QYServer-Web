@@ -1,2 +1,16 @@
+# robots.txt generated at https://www.lanren-tools.com/robots/
+User-agent: Bytespider
+Disallow: /
+User-agent: Yisouspider
+Disallow: /
+User-agent: Googlebot
+Disallow:
+User-agent: Bingbot
+Disallow:
 User-agent: *
-Allow: /
+Disallow:
+Crawl-delay: 120
+Disallow: /bin/
+Disallow: /asses/
+
+Sitemap: https://qyserver.cc/sitemap.xml
