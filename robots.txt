@@ -1,2 +1,10 @@
+User-agent: Googlebot
+Disallow:
+User-agent: Bingbot
+Disallow:
 User-agent: *
-Allow: /
+Disallow:
+Disallow: /bin/
+Disallow: /asses/
+
+Sitemap: https://qyserver.cc/sitemap.xml
