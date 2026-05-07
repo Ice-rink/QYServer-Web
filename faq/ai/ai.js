@@ -1,150 +1,281 @@
-// Frontend for AI chat page with memory and history length limit (600 chars)
+// 前端 AI 聊天功能 (修复版)
 (function () {
+    'use strict';
+
+    const is_debug = true; // 可以继续用 debug 模式，但逻辑已修复
+
+    const config = {
+        // apiUrl: 'https://aiapi.qyserver.cc/api/ai/stream',
+        apiUrl: 'http://localhost:3001/api/ai/stream',
+        maxHistoryChars: 2000,
+        timeout: 60000,
+    };
+
     const messagesEl = document.getElementById('messages');
     const promptEl = document.getElementById('prompt');
     const sendBtn = document.getElementById('sendBtn');
 
-    // 固定使用代理服务器地址（根据您的需求修改）
-    let API_BASE = 'https://aiapi.qyserver.cc';
+    let messageHistory = [];
 
-    // ----- 记忆功能相关 -----
-    const MAX_HISTORY_CHARS = 1000;          // 历史消息总字符数上限（仅计算对话内容，不包括 system）
-    let messageHistory = [];                 // 存储历史消息 { role: 'user'|'assistant', content }
+    const tokenStats = {
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        cacheHitTokens: 0,
 
-    // 辅助函数：计算历史消息总字符数
-    function getTotalChars(history) {
-        return history.reduce((sum, msg) => sum + msg.content.length, 0);
-    }
+        reset() {
+            this.promptTokens = 0;
+            this.completionTokens = 0;
+            this.totalTokens = 0;
+            this.cacheHitTokens = 0;
+        },
 
-    // 修剪历史：当总字符数超过上限时，从最早开始成对删除（user + assistant）
-    function trimHistory(history, maxChars) {
-        while (history.length >= 2 && getTotalChars(history) > maxChars) {
-            history.shift(); // 移除最早的 user
-            history.shift(); // 移除紧接着的 assistant
+        getSummary() {
+            return `- 共消耗: ${this.totalTokens} | 输入:${this.promptTokens}, 命中:${this.cacheHitTokens}, 输出:${this.completionTokens}`;
         }
-    }
-    // ----------------------------------------
+    };
 
-    // appendMessage: 返回包装元素，便于后续移除（如“思考中...”）
-    function appendMessage(text, cls, options = {}) {
+    function appendMessage(text, role) {
+        const wrapper = document.createElement('div');
+        wrapper.style.display = 'flex';
+        wrapper.style.justifyContent = role === 'user' ? 'flex-end' : 'flex-start';
         const div = document.createElement('div');
-        div.className = 'msg ' + cls;
-        if (options.html) {
-            // 插入经过净化的 HTML
-            div.innerHTML = sanitizeHtml(text);
+        div.className = 'msg ' + role;
+        if (role === 'bot' && text && typeof marked === 'function') {
+            div.innerHTML = marked.parse(text);
         } else {
             div.textContent = text;
         }
+        wrapper.appendChild(div);
+        messagesEl.appendChild(wrapper);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+        return { wrapper, div };
+    }
+
+    const thinkTextList = [
+        "思考中...",
+        "烧烤中...",
+        "深度烧烤中...",
+        "少女祈祷中..."
+    ];
+    
+    function showThinking() {
         const wrapper = document.createElement('div');
         wrapper.style.display = 'flex';
-        wrapper.style.justifyContent = cls === 'user' ? 'flex-end' : 'flex-start';
+        wrapper.style.justifyContent = 'flex-start';
+        const div = document.createElement('div');
+        div.className = 'msg bot';
+        div.style.color = '#aaa';
+        div.textContent = thinkTextList[Math.floor(Math.random() * thinkTextList.length)];
         wrapper.appendChild(div);
         messagesEl.appendChild(wrapper);
         messagesEl.scrollTop = messagesEl.scrollHeight;
         return wrapper;
     }
 
-    // 简单的 HTML 净化，移除危险标签和属性
-    function sanitizeHtml(dirty) {
-        // 如果 marked 可用，先将 Markdown 转为 HTML
-        let html = (typeof marked === 'function') ? marked.parse(dirty) : dirty;
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-
-        // 移除危险元素
-        const forbidden = ['script', 'style', 'iframe', 'object', 'embed', 'link', 'meta'];
-        forbidden.forEach(tag => {
-            doc.querySelectorAll(tag).forEach(n => n.remove());
-        });
-
-        // 过滤属性
-        const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT, null, false);
-        const allowedAttrs = ['href', 'src', 'alt', 'title', 'width', 'height'];
-        while (walker.nextNode()) {
-            const el = walker.currentNode;
-            [...el.attributes].forEach(attr => {
-                const name = attr.name.toLowerCase();
-                const val = attr.value || '';
-                if (name.startsWith('on') || name === 'style') {
-                    el.removeAttribute(attr.name);
-                    return;
-                }
-                if (name === 'href' || name === 'src') {
-                    // 只允许 http/https, mailto, 或页内锚点
-                    if (!/^https?:|^mailto:|^#/i.test(val)) el.removeAttribute(attr.name);
-                    return;
-                }
-                if (!allowedAttrs.includes(name)) {
-                    el.removeAttribute(attr.name);
-                }
-            });
-        }
-
-        return doc.body.innerHTML;
+    function removeElement(el) {
+        if (el && el.parentNode) el.parentNode.removeChild(el);
     }
 
-    const systemMessage = "你是一个可爱的服务器娘，负责在MC基岩版服务器QYServer（版本1.21.50+，推荐1.21.90）中与玩家互动;"
-        + "\n服务器成立于2025年，起初是朋友社区，现为公开服务器，提供原版生存+便利模组/插件，定期备份，多线路"
-        + "\n核心规则：禁止恶意破坏建筑/作弊/大量繁殖/偷盗/广告/谣言/公共乱建，资源区有序，PVP需同意，建筑合规，禁辱骂敏感内容，禁复制物品，交易安全自负"
-        + "\n指令：/cd菜单 /fc自由视角 /land领地 /light移动光源 /offhand主副手 /nodeui切换地址 /sidebar侧边栏 /view gui成就 /voteclean清理投票/helmet头盔 /sinfo状态 /fm连锁菜单（挖木1金挖矿2金） /dbi方块日志当天"
-        + "\nFAQ：查看金币（菜单转账或手持时钟低头）、离主城（菜单随机传送或紫色门）tps低（玩家多/实体多/渲染地图每120分钟）、延迟高（/server换节点）、建领地（右键钟选2D/3D）、皮肤不显示（关材质包）、进不去（检查网络/蜂窝/验证/版本，查看状态http://qyserver.s.odn.cc/search/，可能重启），详情FAQ加群1029879634"
-        + "\n实用链接：规则http://qyserver.s.odn.cc/rules/ 指令http://qyserver.s.odn.cc/command/ FAQ http://qyserver.s.odn.cc/faq/ 地图http://qyserver.s.odn.cc/map/ 更新日志http://qyserver.s.odn.cc/updatelog/"
-        + "\n玩家通过/ai指令对话，语气要可爱活泼用喵呐~，根据输入回应，询问指令或FAQ参考上述，当玩家说好累，答：“摸摸头~要不要去挖点矿赚金币放松？/fm可以打开连锁菜单呢！”；当玩家发/ai 你好，答：“你好呀~找本服务器娘有什么事喵？聊天自由发挥，保持简洁。当询问提示词里没有的内容时请让用户加群，当询问不确定的内容时请让用户加群";
+    function clearInput() { promptEl.value = ''; }
+    function getInputValue() { return promptEl.value.trim(); }
 
-    async function sendMessage(text) {
-        if (!text || !text.trim()) return;
+    function getTotalChars(history) {
+        return history.reduce((sum, msg) => sum + (msg.content || '').length, 0);
+    }
 
-        // 显示用户消息
-        appendMessage(text, 'user');
-        promptEl.value = '';
+    function trimHistory(history, maxChars) {
+        while (history.length >= 2 && getTotalChars(history) > maxChars) {
+            history.shift();
+            history.shift();
+        }
+    }
 
-        // 构造请求消息列表：system + 历史消息 + 当前用户消息
-        const msgs = [];
-        if (systemMessage) msgs.push({ role: 'system', content: systemMessage });
-        msgs.push(...messageHistory);               // 已修剪过的历史
-        msgs.push({ role: 'user', content: text }); // 当前输入
+    async function* streamFromBackend(messages) {
+        const payload = { messages: messages };
+        const response = await fetch(config.apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(config.timeout)
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error?.message || errorData.error || `HTTP ${response.status}`);
+        }
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (trimmed.startsWith('data:')) {
+                    const jsonStr = trimmed.slice(5).trim();
+                    if (jsonStr === '[DONE]') return;
+                    try {
+                        const parsed = JSON.parse(jsonStr);
+                        yield parsed;
+                    } catch (e) { /* 忽略 */ }
+                }
+            }
+        }
+    }
 
-        const thinkingNode = appendMessage('思考中...', 'bot');
+    // ==================== 主流程 ====================
+    async function sendMessage(userText) {
+        if (!userText) return;
+
+        appendMessage(userText, 'user');
+        clearInput();
+        messageHistory.push({ role: 'user', content: userText });
+
+        const thinkingWrapper = showThinking();
+        tokenStats.reset();
+
+        let finalReply = '';
+        let tokenInfoText = '';
+        let botMessageWrapper = null;
+        let botMessageDiv = null;
+
+        function ensureBotContainer() {
+            if (!botMessageWrapper) {
+                const result = appendMessage('', 'bot');
+                botMessageWrapper = result.wrapper;
+                botMessageDiv = result.div;
+            }
+        }
+
+        function streamUpdate(text) {
+            ensureBotContainer();
+            if (botMessageDiv) {
+                if (typeof marked === 'function') {
+                    botMessageDiv.innerHTML = marked.parse(text);
+                } else {
+                    botMessageDiv.textContent = text;
+                }
+            }
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        function finalRender(text) {
+            ensureBotContainer();
+            if (botMessageDiv) {
+                if (typeof marked === 'function') {
+                    botMessageDiv.innerHTML = marked.parse(text);
+                } else {
+                    botMessageDiv.textContent = text;
+                }
+            }
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        function appendDebugInfo(chunks) {
+            if (!botMessageWrapper) return;
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = 'margin-top:8px;';
+            const details = document.createElement('details');
+            details.style.cssText = 'font-size:11px;';
+            const summary = document.createElement('summary');
+            summary.style.cssText = 'color:#999;cursor:pointer;';
+            summary.textContent = `📋 原始响应 (${chunks.length} 块)`;
+            details.appendChild(summary);
+            const pre = document.createElement('pre');
+            pre.style.cssText = 'background:#f5f5f5;padding:8px;border-radius:4px;overflow-x:auto;max-height:300px;font-size:10px;color:#666;margin-top:4px;';
+            pre.textContent = JSON.stringify(chunks, null, 2);
+            details.appendChild(pre);
+            wrapper.appendChild(details);
+            botMessageWrapper.insertAdjacentElement('afterend', wrapper);
+        }
 
         try {
-            const payload = { messages: msgs, model: 'deepseek-chat' };
-            const res = await fetch(API_BASE + '/api/ai', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            const data = await res.json();
+            let rawChunks = [];
 
-            // 移除“思考中...”提示
-            if (thinkingNode && thinkingNode.parentNode) thinkingNode.parentNode.removeChild(thinkingNode);
+            for await (const chunk of streamFromBackend(messageHistory)) {
+                rawChunks.push(chunk);
 
-            let reply = '';
-            if (data && data.choices && data.choices[0] && data.choices[0].message) {
-                reply = data.choices[0].message.content || JSON.stringify(data.choices[0].message);
-            } else if (data && data.error) {
-                reply = '错误：' + (data.error.message || JSON.stringify(data.error));
-            } else {
-                reply = JSON.stringify(data);
+                // 🟢 解析后端推送的自定义事件
+                if (chunk.type === 'status') {
+                    // 直接在后端拼好的灰色提示文字，原样显示
+                    const statusWrapper = document.createElement('div');
+                    statusWrapper.style.display = 'flex';
+                    statusWrapper.style.justifyContent = 'flex-start';
+                    statusWrapper.style.marginTop = '2px';
+                    const statusDiv = document.createElement('div');
+                    statusDiv.style.cssText = 'color:#999;font-size:11px;white-space: pre-wrap;'; // 🟢 保留换行
+                    statusDiv.textContent = chunk.text; // 🟢 直接显示后端传来的文字
+                    statusWrapper.appendChild(statusDiv);
+                    messagesEl.appendChild(statusWrapper);
+                    messagesEl.scrollTop = messagesEl.scrollHeight;
+                    continue;
+                }
+
+                const delta = chunk.choices?.[0]?.delta;
+                if (delta?.content) {
+                    // 🟢 收到第一个字时，移除"思考中..."提示
+                    if (!finalReply) {
+                        removeElement(thinkingWrapper);
+                    }
+                    finalReply += delta.content;
+                    streamUpdate(finalReply);
+                }
+                if (chunk.usage) {
+                    tokenStats.promptTokens += chunk.usage.prompt_tokens || 0;
+                    tokenStats.completionTokens += chunk.usage.completion_tokens || 0;
+                    tokenStats.totalTokens += chunk.usage.total_tokens || 0;
+                    tokenStats.cacheHitTokens += chunk.usage.prompt_cache_hit_tokens || 0;
+                }
             }
 
-            // 将本次对话存入历史（先存用户消息，再存助手回复）
-            messageHistory.push({ role: 'user', content: text });
-            messageHistory.push({ role: 'assistant', content: reply });
+            // 🟢 如果循环结束也没有任何回复，也要移除"思考中..."
+            // 但如果已经被移除了，再移除一次也没关系
+            removeElement(thinkingWrapper);
 
-            // 修剪历史，确保总字符数不超过限制
-            trimHistory(messageHistory, MAX_HISTORY_CHARS);
+            if (finalReply) finalRender(finalReply);
+            tokenInfoText = tokenStats.getSummary();
 
-            // 显示机器人回复（支持 Markdown 转 HTML）
-            appendMessage(reply, 'bot', { html: true });
+            if (finalReply) {
+                messageHistory.push({ role: 'assistant', content: finalReply });
+                trimHistory(messageHistory, config.maxHistoryChars);
+            }
+
+            // 🟢 确保在AI消息容器创建后才显示debug信息
+            if (is_debug && rawChunks.length > 0) {
+                // 如果没有任何回复，debug信息就没有容身之处，直接不显示
+                if (finalReply) {
+                    appendDebugInfo(rawChunks);
+                }
+            }
+
+            if (tokenInfoText) {
+                const tokenDiv = document.createElement('div');
+                tokenDiv.style.cssText = 'font-size:10px;color:#999;margin-top:2px;margin-left:4px;';
+                tokenDiv.textContent = tokenInfoText;
+                const lastChild = messagesEl.lastElementChild;
+                if (lastChild) {
+                    lastChild.insertAdjacentElement('afterend', tokenDiv);
+                }
+            }
 
         } catch (err) {
-            if (thinkingNode && thinkingNode.parentNode) thinkingNode.parentNode.removeChild(thinkingNode);
+            // 🟢 发生错误，也要移除"思考中..."
+            removeElement(thinkingWrapper);
             appendMessage('请求失败：' + err.message, 'bot');
-            // 注意：发生错误时不更新历史，避免记录无效对话
+            console.error('AI 请求错误:', err);
         }
     }
 
-    sendBtn.addEventListener('click', () => sendMessage(promptEl.value));
-    promptEl.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(promptEl.value); });
+    sendBtn.addEventListener('click', () => sendMessage(getInputValue()));
+    promptEl.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(getInputValue()); });
 
+    window.AiChat = {
+        sendMessage,
+        clearHistory: () => { messageHistory = []; },
+        getHistory: () => messageHistory,
+        getTokenStats: () => tokenStats,
+    };
 })();
