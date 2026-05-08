@@ -1,12 +1,11 @@
-// 前端 AI 聊天功能 (修复版)
+// 前端 AI 聊天功能 (修复版 - 支持 Markdown 异步渲染)
 (function () {
     'use strict';
 
-    const is_debug = true; // 可以继续用 debug 模式，但逻辑已修复
+    const is_debug = true;
 
     const config = {
         apiUrl: 'https://aiapi.qyserver.cc/api/ai/stream',
-        // apiUrl: 'http://localhost:3001/api/ai/stream',
         maxHistoryChars: 2000,
         timeout: 60000,
     };
@@ -42,6 +41,8 @@
         const div = document.createElement('div');
         div.className = 'msg ' + role;
         if (role === 'bot' && text && typeof marked === 'function') {
+            // 旧版同步 marked 会直接返回 HTML，新版异步则等待最终渲染
+            // 这里不处理，最终渲染会用 await marked.parse
             div.innerHTML = marked.parse(text);
         } else {
             div.textContent = text;
@@ -150,23 +151,27 @@
             }
         }
 
+        // 流式阶段：仅显示纯文本，避免频繁解析 Markdown 造成性能问题和异步错误
         function streamUpdate(text) {
             ensureBotContainer();
             if (botMessageDiv) {
-                if (typeof marked === 'function') {
-                    botMessageDiv.innerHTML = marked.parse(text);
-                } else {
-                    botMessageDiv.textContent = text;
-                }
+                botMessageDiv.textContent = text;
             }
             messagesEl.scrollTop = messagesEl.scrollHeight;
         }
 
-        function finalRender(text) {
+        // 最终渲染：异步解析 Markdown，完成后替换内容
+        async function finalRender(text) {
             ensureBotContainer();
             if (botMessageDiv) {
                 if (typeof marked === 'function') {
-                    botMessageDiv.innerHTML = marked.parse(text);
+                    try {
+                        const html = await marked.parse(text);
+                        botMessageDiv.innerHTML = html;
+                    } catch (e) {
+                        console.warn('Markdown parse error:', e);
+                        botMessageDiv.textContent = text;
+                    }
                 } else {
                     botMessageDiv.textContent = text;
                 }
@@ -198,16 +203,15 @@
             for await (const chunk of streamFromBackend(messageHistory)) {
                 rawChunks.push(chunk);
 
-                // 🟢 解析后端推送的自定义事件
+                // 🟢 后端推送的自定义状态消息
                 if (chunk.type === 'status') {
-                    // 直接在后端拼好的灰色提示文字，原样显示
                     const statusWrapper = document.createElement('div');
                     statusWrapper.style.display = 'flex';
                     statusWrapper.style.justifyContent = 'flex-start';
                     statusWrapper.style.marginTop = '2px';
                     const statusDiv = document.createElement('div');
-                    statusDiv.style.cssText = 'color:#999;font-size:11px;white-space: pre-wrap;'; // 🟢 保留换行
-                    statusDiv.textContent = chunk.text; // 🟢 直接显示后端传来的文字
+                    statusDiv.style.cssText = 'color:#999;font-size:11px;white-space: pre-wrap;';
+                    statusDiv.textContent = chunk.text;
                     statusWrapper.appendChild(statusDiv);
                     messagesEl.appendChild(statusWrapper);
                     messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -216,7 +220,6 @@
 
                 const delta = chunk.choices?.[0]?.delta;
                 if (delta?.content) {
-                    // 🟢 收到第一个字时，移除"思考中..."提示
                     if (!finalReply) {
                         removeElement(thinkingWrapper);
                     }
@@ -231,11 +234,9 @@
                 }
             }
 
-            // 🟢 如果循环结束也没有任何回复，也要移除"思考中..."
-            // 但如果已经被移除了，再移除一次也没关系
             removeElement(thinkingWrapper);
 
-            if (finalReply) finalRender(finalReply);
+            if (finalReply) await finalRender(finalReply);
             tokenInfoText = tokenStats.getSummary();
 
             if (finalReply) {
@@ -243,12 +244,8 @@
                 trimHistory(messageHistory, config.maxHistoryChars);
             }
 
-            // 🟢 确保在AI消息容器创建后才显示debug信息
-            if (is_debug && rawChunks.length > 0) {
-                // 如果没有任何回复，debug信息就没有容身之处，直接不显示
-                if (finalReply) {
-                    appendDebugInfo(rawChunks);
-                }
+            if (is_debug && rawChunks.length > 0 && finalReply) {
+                appendDebugInfo(rawChunks);
             }
 
             if (tokenInfoText) {
@@ -262,7 +259,6 @@
             }
 
         } catch (err) {
-            // 🟢 发生错误，也要移除"思考中..."
             removeElement(thinkingWrapper);
             appendMessage('请求失败：' + err.message, 'bot');
             console.error('AI 请求错误:', err);
