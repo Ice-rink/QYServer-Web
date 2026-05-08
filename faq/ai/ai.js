@@ -6,7 +6,7 @@
 
     const config = {
         apiUrl: 'https://aiapi.qyserver.cc/api/ai/stream',
-        //apiUrl: 'http://localhost:3001/api/ai/stream',
+        // apiUrl: 'http://localhost:3001/api/ai/stream',
         maxHistoryChars: 2000,
         timeout: 60000,
     };
