@@ -1,0 +1,105 @@
+{
+    "categories": [
+        {
+            "name": "玩家基础指令",
+            "commands": [
+                {
+                    "name": "/cd",
+                    "icon": "fa-home",
+                    "description": "打开菜单",
+                    "usage": null
+                },
+                {
+                    "name": "/eh",
+                    "icon": "fa-user-friends",
+                    "description": "快捷搬运，开启关闭，设置",
+                    "usage": null
+                },
+                {
+                    "name": "/fc",
+                    "icon": "fa-coins",
+                    "description": "开/关自由视角",
+                    "usage": null
+                },
+                {
+                    "name": "/land",
+                    "icon": "fa-coins",
+                    "description": "领地设置",
+                    "usage": null
+                },
+                {
+                    "name": "/light",
+                    "icon": "fa-coins",
+                    "description": "移动光源设置",
+                    "usage": null
+                },
+                {
+                    "name": "/offhand",
+                    "icon": "fa-coins",
+                    "description": "主副手切换",
+                    "usage": null
+                },
+                {
+                    "name": "/nodeui",
+                    "icon": "fa-coins",
+                    "description": "切换地址",
+                    "usage": "优先选择距离近和同运营商"
+                },
+                {
+                    "name": "/sidebar",
+                    "icon": "fa-coins",
+                    "description": "开/关侧边栏",
+                    "usage": null
+                },
+                {
+                    "name": "/view gui",
+                    "icon": "fa-coins",
+                    "description": "查看已完成成就",
+                    "usage": null
+                },
+                {
+                    "name": "/voteclean",
+                    "icon": "fa-coins",
+                    "description": "发起实体清理投票",
+                    "usage": null
+                },
+                {
+                    "name": "/scale",
+                    "icon": "fa-coins",
+                    "description": "本地大小修改",
+                    "usage": "最小：1 最大：35"
+                },
+                {
+                    "name": "/helmet",
+                    "icon": "fa-coins",
+                    "description": "头部盔甲切换",
+                    "usage": null
+                },
+                {
+                    "name": "/ai",
+                    "icon": "fa-coins",
+                    "description": "与Ai对话",
+                    "usage": "/ai 你好"
+                },
+                {
+                    "name": "/sinfo",
+                    "icon": "fa-coins",
+                    "description": "查询运行状态",
+                    "usage": null
+                },
+                {
+                    "name": "/devfunc xpfix",
+                    "icon": "fa-coins",
+                    "description": "扣除经验修复装备",
+                    "usage": "1点经验增加10点耐久"
+                },
+                {
+                    "name": "/fm",
+                    "icon": "fa-coins",
+                    "description": "打开连锁菜单",
+                    "usage": "挖木头一个一金币\n挖矿一个两金币"
+                }
+            ]
+        }
+    ]
+}
