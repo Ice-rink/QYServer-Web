@@ -1,6 +1,11 @@
 [
   {
-    "date": "2026-06-02",
+    "date": "2026-05-09",
+    "title": "=== 小更新日志 ===",
+    "content": "[+] 留言小船评论功能\n[+] 游戏内查看更新日志\n[+] 玩偶商店-翘翅斗篷商店\n<img src=\"https://qycloudreve.s.odn.cc/f/QMaik/3492ce1.webp\" width=\"60%\" style=\"height:auto;\">\n<p5>右键小船打开\n<img src=\"https://qycloudreve.s.odn.cc/f/gB1Fz/bff159.webp\" width=\"65%\" style=\"height:auto;\">\n<p5>/om updata</P><img src=\"https://qycloudreve.s.odn.cc/f/eLYhw/1778391932498.webp\" width=\"70%\" style=\"height:auto;\">\n<p5>玩偶商店边上</p5>"
+  },
+  {
+    "date": "2026-05-02",
     "title": "=== 小更新日志 ===",
     "content": "[+] 服务器娘己支持上下文\n[+] 支持 投喂 || rua 服务器娘\n[+] 服务器能接入小型知识库\n \n[#] 服务器娘核心变为DeepSeek v4\n[#] 修复网页地图不转发QQ消息问题\n \n<p4>指令</p4>\n<p5>/om aichat give</p5> - 投喂主手手持食物\n<p5>/om aichat rua</p5> - rua一下服务器娘\n<img src=\"\" width=\"80%\" style=\"height:auto;\">\n<p4>介绍</p4>\n<img src=\"https://qycloudreve.s.odn.cc/f/X6nfr/5d2f8b35-d518-42d5-8d48-fabb7144978e.jpeg\" width=\"95%\" style=\"height:auto;\">\nrua和投喂\n投喂时有概率收到回礼哦~\n<img src=\"https://qycloudreve.s.odn.cc/f/qrnhX/carbon.png\" width=\"95%\" style=\"height:auto;\">\n支持投喂的食物"
   },
