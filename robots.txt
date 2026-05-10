@@ -11,6 +11,6 @@ User-agent: *
 Disallow:
 Crawl-delay: 120
 Disallow: /bin/
-Disallow: /asses/
+Disallow: /Asses/
 
 Sitemap: https://qyserver.cc/sitemap.xml
