@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QYServer | 日志查询</title>
+    <link rel="stylesheet" href="/lib/all.css">
+    <script src="/lib/AllComponents.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --bg: #f4f6f9;
+            --card-bg: #ffffff;
+            --primary: #6c5ce7;
+            --primary-light: #a29bfe;
+            --text: #2d3436;
+            --text-secondary: #636e72;
+            --border: #e0e0e0;
+            --shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            --radius: 14px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "微软雅黑", "Microsoft YaHei", Roboto, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+            min-height: 100vh;
+        }
+
+        /* 主容器调整，避开导航栏 */
+        .app-container {
+            max-width: 1600px;
+            margin: 80px auto 40px;
+            padding: 20px;
+            display: none;
+        }
+
+        .app-container.active {
+            display: block;
+        }
+
+        /* 上传覆盖层样式保持不变 */
+        .upload-overlay {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 80vh;
+            margin-top: 60px;
+        }
+
+        .upload-overlay.hidden {
+            display: none;
+        }
+
+        .upload-card {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 50px 40px;
+            text-align: center;
+            width: 90%;
+            max-width: 500px;
+            border: 2px dashed var(--border);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .upload-card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 6px 25px rgba(108, 92, 231, 0.15);
+        }
+
+        .upload-card i {
+            font-size: 48px;
+            color: var(--primary-light);
+            margin-bottom: 16px;
+        }
+
+        .upload-card h2 {
+            font-size: 1.5rem;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .upload-card p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        /* 统计卡片 */
+        .stats-row {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .stat-item {
+            background: var(--card-bg);
+            padding: 14px 20px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 500;
+        }
+
+        .stat-item i {
+            color: var(--primary);
+            font-size: 1.2rem;
+        }
+
+        .stat-value {
+            font-weight: 700;
+            color: var(--primary);
+            margin-left: 4px;
+        }
+
+        /* 查询卡片 */
+        .query-card,
+        .table-card {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 20px 24px;
+            margin-bottom: 20px;
+        }
+
+        .query-card h3,
+        .table-card h3 {
+            font-size: 1.1rem;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text);
+        }
+
+        .query-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            /* 两列布局，更紧凑 */
+            gap: 16px 24px;
+            margin-bottom: 16px;
+        }
+
+        .query-item {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        /* 坐标范围占一整行 */
+        .query-item.coords {
+            grid-column: span 2;
+        }
+
+        .query-item label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .query-item input,
+        .query-item select {
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 0.9rem;
+            transition: border 0.2s;
+            background: #fafafa;
+        }
+
+        .query-item input:focus,
+        .query-item select:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: #fff;
+            box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.1);
+        }
+
+        .range-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .range-row span {
+            color: var(--text-secondary);
+            font-weight: 500;
+            flex-shrink: 0;
+        }
+
+        .range-row input {
+            flex: 1;
+        }
+
+        /* 坐标轴标签 */
+        .coord-label {
+            font-weight: 600;
+            color: var(--primary);
+            min-width: 20px;
+            text-align: center;
+        }
+
+        .query-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 8px;
+        }
+
+        .btn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.9rem;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: #5b4cdb;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(108, 92, 231, 0.3);
+        }
+
+        .btn-outline {
+            background: #fff;
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        .btn-outline:hover {
+            background: #f8f8f8;
+            border-color: #ccc;
+        }
+
+        /* 表格虚拟滚动容器 */
+        .clusterize-scroll {
+            max-height: 600px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: auto;
+        }
+
+        .clusterize-scroll table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: auto;
+            /* 自动调整列宽 */
+            min-width: 1400px;
+            /* 保证小屏幕也能滚动查看所有列 */
+        }
+
+        .clusterize-scroll thead {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            background: #f8f9fa;
+        }
+
+        .clusterize-scroll th {
+            padding: 12px 10px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            border-bottom: 2px solid var(--border);
+            white-space: nowrap;
+            background: #f8f9fa;
+        }
+
+        .clusterize-scroll td {
+            padding: 10px;
+            font-size: 0.82rem;
+            border-bottom: 1px solid #f0f0f0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            /* max-width: 300px; */
+            /* 限制最大宽度，防止单个单元格过宽 */
+        }
+
+        .clusterize-scroll tr:hover td {
+            background: #f5f3ff;
+        }
+
+        .loading-bar {
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary), var(--primary-light));
+            border-radius: 2px;
+            animation: loading 1.5s infinite;
+            width: 0%;
+            margin-bottom: 20px;
+        }
+
+        @keyframes loading {
+            0% {
+                width: 0%;
+            }
+
+            50% {
+                width: 70%;
+            }
+
+            100% {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 900px) {
+            .query-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .query-item.coords {
+                grid-column: span 1;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="upload-overlay" id="uploadOverlay">
+        <div class="upload-card" id="uploadCard">
+            <i class="fas fa-cloud-upload-alt"></i>
+            <h2>点击或拖拽上传 CSV 日志文件</h2>
+            <p>支持 10MB+ 大文件，后台解析不卡顿</p>
+            <input type="file" id="fileInput" accept=".csv" hidden>
+        </div>
+    </div>
+
+    <div class="app-container" id="appContainer">
+        <div class="loading-bar" id="loadingBar" style="display:none;"></div>
+
+        <div class="stats-row">
+            <div class="stat-item"><i class="fas fa-database"></i> 总记录: <span class="stat-value"
+                    id="totalRecords">0</span></div>
+            <div class="stat-item"><i class="fas fa-filter"></i> 筛选结果: <span class="stat-value"
+                    id="filteredRecords">0</span></div>
+            <div class="stat-item"><i class="fas fa-clock"></i> 解析耗时: <span class="stat-value" id="parseTime">0s</span>
+            </div>
+        </div>
+
+        <div class="query-card">
+            <h3><i class="fas fa-search"></i> 查询条件</h3>
+            <div class="query-grid">
+                <!-- 时间范围 -->
+                <div class="query-item">
+                    <label>时间范围</label>
+                    <div class="range-row">
+                        <input type="datetime-local" id="filterTimeStart">
+                        <span>—</span>
+                        <input type="datetime-local" id="filterTimeEnd">
+                    </div>
+                </div>
+                <!-- 坐标范围 - 独立一行 -->
+                <div class="query-item coords">
+                    <label>坐标范围</label>
+                    <div class="range-row">
+                        <span class="coord-label">X</span>
+                        <input type="number" id="filterXMin" placeholder="最小">
+                        <span>~</span>
+                        <input type="number" id="filterXMax" placeholder="最大">
+                    </div>
+                    <div class="range-row" style="margin-top:8px;">
+                        <span class="coord-label">Y</span>
+                        <input type="number" id="filterYMin" placeholder="最小">
+                        <span>~</span>
+                        <input type="number" id="filterYMax" placeholder="最大">
+                    </div>
+                    <div class="range-row" style="margin-top:8px;">
+                        <span class="coord-label">Z</span>
+                        <input type="number" id="filterZMin" placeholder="最小">
+                        <span>~</span>
+                        <input type="number" id="filterZMax" placeholder="最大">
+                    </div>
+                </div>
+                <!-- 维度 -->
+                <div class="query-item">
+                    <label>维度</label>
+                    <select id="filterDimension">
+                        <option value="">全部</option>
+                        <option value="主世界">主世界</option>
+                        <option value="下界">下界</option>
+                        <option value="末地">末地</option>
+                    </select>
+                </div>
+                <!-- 来源 / 玩家 -->
+                <div class="query-item">
+                    <label>玩家 (来源)</label>
+                    <input type="text" id="filterSource" placeholder="输入玩家名">
+                </div>
+                <!-- 事件 -->
+                <div class="query-item">
+                    <label>事件</label>
+                    <select id="filterEvent">
+                        <option value="">全部事件</option>
+                    </select>
+                </div>
+                <!-- 目标 -->
+                <div class="query-item">
+                    <label>目标</label>
+                    <input type="text" id="filterTarget" placeholder="目标实体/玩家/方块">
+                </div>
+                <!-- 附加信息 -->
+                <div class="query-item">
+                    <label>附加信息</label>
+                    <input type="text" id="filterExtra" placeholder="关键词搜索">
+                </div>
+            </div>
+            <div class="query-actions">
+                <button class="btn btn-primary" id="btnApply"><i class="fas fa-check"></i> 应用筛选</button>
+                <button class="btn btn-outline" id="btnReset"><i class="fas fa-undo-alt"></i> 重置</button>
+            </div>
+        </div>
+
+        <div class="table-card">
+            <h3><i class="fas fa-table"></i> 查询结果 (虚拟滚动)</h3>
+            <div class="clusterize-scroll" id="scrollArea">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>时间</th>
+                            <th>维度</th>
+                            <th>来源</th>
+                            <th>X</th>
+                            <th>Y</th>
+                            <th>Z</th>
+                            <th>事件</th>
+                            <th>目标</th>
+                            <th>目标X</th>
+                            <th>目标Y</th>
+                            <th>目标Z</th>
+                            <th>附加信息</th>
+                        </tr>
+                    </thead>
+                    <tbody id="contentArea"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/clusterize.js@0.18.1/clusterize.min.js"></script>
+
+    <script>
+        // ==================== Web Worker 内联代码 (用于后台解析 CSV) ====================
+        const workerBlob = new Blob([`
+                importScripts('https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js');
+                self.onmessage = function(e) {
+        const {file} = e.data;
+                Papa.parse(file, {
+                    header: true,
+                skipEmptyLines: true,
+                dynamicTyping: false,
+                complete: function(results) {
+                // 只传必要字段给主线程，减少序列化开销
+                const fields = results.meta.fields || [];
+                const data = results.data.filter(row => Object.values(row).some(v => v && String(v).trim()));
+                self.postMessage({type: 'done', fields, data });
+            },
+                error: function(err) {
+                    self.postMessage({ type: 'error', message: err.message });
+            }
+        });
+    };
+                `], { type: 'application/javascript' });
+
+        const worker = new Worker(URL.createObjectURL(workerBlob));
+
+        // ==================== 全局状态 ====================
+        let allRecords = [];
+        let filteredRecords = [];
+        let clusterize = null; // 虚拟滚动实例
+
+        // 事件列表 (固定)
+        const EVENT_LIST = [
+            "开始进服", "进入服务器", "离开服务器", "重生", "玩家死亡", "玩家执行命令", "发送对话",
+            "切换维度", "跳跃", "潜行", "攻击", "使用物品", "使用物品点击方块", "捡起物品", "丢出物品",
+            "进食", "开始破坏方块", "破坏方块", "放置方块", "打开容器", "关闭容器", "物品栏 取出物品",
+            "物品栏 放入物品", "容器 取出物品", "容器 放入物品", "盔甲栏 取出物品", "盔甲栏 放入物品",
+            "使用重生锚", "打开容器UI", "生物死亡", "生物受伤", "爆炸", "弹射物击中", "凋零破坏",
+            "生物骑乘", "踩踏压力板", "方块接受玩家互动", "床爆炸", "重生锚爆炸", "方块被爆炸破坏",
+            "命令方块执行", "弹射物击中", "红石更新", "漏斗（矿车）输出物品", "活塞推动", "破坏耕地",
+            "操作物品展示框", "计分板数值改变", "火焰蔓延", "执行后台命令"
+        ];
+
+        // ==================== DOM 引用 ====================
+        const uploadOverlay = document.getElementById('uploadOverlay');
+        const appContainer = document.getElementById('appContainer');
+        const loadingBar = document.getElementById('loadingBar');
+
+        const totalRecordsEl = document.getElementById('totalRecords');
+        const filteredRecordsEl = document.getElementById('filteredRecords');
+        const parseTimeEl = document.getElementById('parseTime');
+
+        const filterEventSelect = document.getElementById('filterEvent');
+        const scrollArea = document.getElementById('scrollArea');
+        const contentArea = document.getElementById('contentArea');
+
+        // ==================== 初始化事件下拉框 ====================
+        EVENT_LIST.forEach(ev => {
+            const opt = document.createElement('option');
+            opt.value = ev;
+            opt.textContent = ev;
+            filterEventSelect.appendChild(opt);
+        });
+
+        // ==================== 文件上传处理 ====================
+        const uploadCard = document.getElementById('uploadCard');
+        const fileInput = document.getElementById('fileInput');
+
+        uploadCard.addEventListener('click', () => fileInput.click());
+
+        uploadCard.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadCard.style.borderColor = '#6c5ce7';
+        });
+        uploadCard.addEventListener('dragleave', () => {
+            uploadCard.style.borderColor = '#e0e0e0';
+        });
+        uploadCard.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadCard.style.borderColor = '#e0e0e0';
+            const file = e.dataTransfer.files[0];
+            if (file) processFile(file);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) processFile(file);
+        });
+
+        function processFile(file) {
+            if (!file.name.endsWith('.csv')) {
+                alert('请选择 .csv 文件');
+                return;
+            }
+
+            // 显示加载界面
+            uploadOverlay.classList.add('hidden');
+            appContainer.classList.add('active');
+            loadingBar.style.display = 'block';
+
+            const startTime = performance.now();
+
+            worker.onmessage = function (e) {
+                if (e.data.type === 'done') {
+                    allRecords = e.data.data;
+                    filteredRecords = [...allRecords];
+
+                    const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+                    loadingBar.style.display = 'none';
+                    parseTimeEl.textContent = elapsed + 's';
+                    totalRecordsEl.textContent = allRecords.length;
+                    filteredRecordsEl.textContent = filteredRecords.length;
+
+                    // 初始化虚拟滚动
+                    initClusterize();
+                } else if (e.data.type === 'error') {
+                    alert('解析失败: ' + e.data.message);
+                    loadingBar.style.display = 'none';
+                }
+            };
+
+            worker.postMessage({ file });
+        }
+
+        // ==================== 虚拟滚动初始化 ====================
+        function initClusterize() {
+            if (clusterize) clusterize.destroy();
+
+            clusterize = new Clusterize({
+                rows: buildRows(filteredRecords),
+                scrollElem: scrollArea,
+                contentElem: contentArea,
+                rows_in_block: 50,
+                blocks_in_cluster: 4,
+                show_no_data_row: true,
+                no_data_text: '暂无数据'
+            });
+        }
+
+        function buildRows(records) {
+            return records.map(r => {
+                const html = '<tr>' +
+                    `<td>${esc(r['时间'])}</td>` +
+                    `<td>${esc(r['维度'])}</td>` +
+                    `<td>${esc(r['来源'])}</td>` +
+                    `<td>${esc(r['X'])}</td>` +
+                    `<td>${esc(r['Y'])}</td>` +
+                    `<td>${esc(r['Z'])}</td>` +
+                    `<td>${esc(r['事件'])}</td>` +
+                    `<td>${esc(r['目标'])}</td>` +
+                    `<td>${esc(r['x'])}</td>` +
+                    `<td>${esc(r['y'])}</td>` +
+                    `<td>${esc(r['z'])}</td>` +
+                    `<td>${esc(r['附加信息'])}</td>` +
+                    '</tr>';
+                return html;
+            });
+        }
+
+        function esc(str) {
+            if (!str) return '';
+            const s = String(str);
+            return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        // ==================== 筛选逻辑 ====================
+        function applyFilter() {
+            const timeStart = document.getElementById('filterTimeStart').value;
+            const timeEnd = document.getElementById('filterTimeEnd').value;
+            const dim = document.getElementById('filterDimension').value;
+            const source = document.getElementById('filterSource').value.trim().toLowerCase();
+            const event = document.getElementById('filterEvent').value;
+            const target = document.getElementById('filterTarget').value.trim().toLowerCase();
+            const extra = document.getElementById('filterExtra').value.trim().toLowerCase();
+
+            const xMin = parseFloat(document.getElementById('filterXMin').value);
+            const xMax = parseFloat(document.getElementById('filterXMax').value);
+            const yMin = parseFloat(document.getElementById('filterYMin').value);
+            const yMax = parseFloat(document.getElementById('filterYMax').value);
+            const zMin = parseFloat(document.getElementById('filterZMin').value);
+            const zMax = parseFloat(document.getElementById('filterZMax').value);
+
+            const startMs = timeStart ? new Date(timeStart).getTime() : null;
+            const endMs = timeEnd ? new Date(timeEnd).getTime() : null;
+
+            filteredRecords = allRecords.filter(r => {
+                // 时间
+                if (startMs || endMs) {
+                    const t = parseTime(r['时间']);
+                    if (!t) return false;
+                    if (startMs && t < startMs) return false;
+                    if (endMs && t > endMs) return false;
+                }
+                // 维度
+                if (dim && r['维度'] !== dim) return false;
+                // 来源
+                if (source && !(r['来源'] || '').toLowerCase().includes(source)) return false;
+                // 事件
+                if (event && r['事件'] !== event) return false;
+                // 目标
+                if (target && !(r['目标'] || '').toLowerCase().includes(target)) return false;
+                // 附加信息
+                if (extra && !(r['附加信息'] || '').toLowerCase().includes(extra)) return false;
+                // 坐标
+                if (!isNaN(xMin) && (parseFloat(r['X']) || 0) < xMin) return false;
+                if (!isNaN(xMax) && (parseFloat(r['X']) || 0) > xMax) return false;
+                if (!isNaN(yMin) && (parseFloat(r['Y']) || 0) < yMin) return false;
+                if (!isNaN(yMax) && (parseFloat(r['Y']) || 0) > yMax) return false;
+                if (!isNaN(zMin) && (parseFloat(r['Z']) || 0) < zMin) return false;
+                if (!isNaN(zMax) && (parseFloat(r['Z']) || 0) > zMax) return false;
+
+                return true;
+            });
+
+            filteredRecordsEl.textContent = filteredRecords.length;
+
+            // 更新虚拟滚动
+            if (clusterize) {
+                clusterize.update(buildRows(filteredRecords));
+            } else {
+                initClusterize();
+            }
+
+            // 🟢 强制表格重新计算列宽
+            requestAnimationFrame(() => {
+                const table = scrollArea.querySelector('table');
+                if (table) {
+                    table.style.tableLayout = 'fixed';
+                    // eslint-disable-next-line no-unused-expressions
+                    table.offsetHeight; // 强制回流
+                    table.style.tableLayout = 'auto';
+                }
+            });
+        }
+
+        function resetFilter() {
+            document.getElementById('filterTimeStart').value = '';
+            document.getElementById('filterTimeEnd').value = '';
+            document.getElementById('filterXMin').value = '';
+            document.getElementById('filterXMax').value = '';
+            document.getElementById('filterYMin').value = '';
+            document.getElementById('filterYMax').value = '';
+            document.getElementById('filterZMin').value = '';
+            document.getElementById('filterZMax').value = '';
+            document.getElementById('filterDimension').value = '';
+            document.getElementById('filterSource').value = '';
+            document.getElementById('filterEvent').value = '';
+            document.getElementById('filterTarget').value = '';
+            document.getElementById('filterExtra').value = '';
+
+            filteredRecords = [...allRecords];
+            filteredRecordsEl.textContent = filteredRecords.length;
+            if (clusterize) clusterize.update(buildRows(filteredRecords));
+        }
+
+        function parseTime(val) {
+            if (!val) return null;
+            const d = new Date(val);
+            if (!isNaN(d.getTime())) return d.getTime();
+            const m = String(val).match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})[T\s](\d{1,2}):(\d{2})(?::(\d{2}))?/);
+            if (m) return new Date(m[1], m[2] - 1, m[3], m[4], m[5], m[6] || 0).getTime();
+            return null;
+        }
+
+        // ==================== 事件绑定 ====================
+        document.getElementById('btnApply').addEventListener('click', applyFilter);
+        document.getElementById('btnReset').addEventListener('click', resetFilter);
+
+    </script>
+</body>
+
+</html>
